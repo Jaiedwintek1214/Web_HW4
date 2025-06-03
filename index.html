@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>Guava 價格查詢與新增</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; }
+    h1 { color: #2c3e50; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    select, input, button { margin: 5px; padding: 6px; }
+  </style>
+</head>
+<body>
+<h1>📊 Guava 價格查詢與新增</h1>
+
+<!-- 三層選單 -->
+<label for="yearSelect">📅 年份：</label>
+<select id="yearSelect"><option value="">-- 所有年份 --</option></select>
+
+<label for="monthSelect">🗓️ 月份：</label>
+<select id="monthSelect"><option value="">-- 所有月份 --</option></select>
+
+<label for="dateSelect">📆 日期：</label>
+<select id="dateSelect"><option value="">-- 所有日期 --</option></select>
+
+<!-- 表格 -->
+<table id="guavaTable">
+  <thead>
+  <tr>
+    <th>ID</th>
+    <th>平均價格</th>
+    <th>交易量</th>
+    <th>日期</th>
+  </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<div id="pagination" style="margin-top: 1em;"></div>
+
+<!-- 新增表單 -->
+<h2>➕ 新增番石榴價格資料</h2>
+<form id="guavaForm" autocomplete="off" onsubmit="return false;">
+  <label>平均價格: <input type="number" step="0.01" name="avg_price" required></label>
+  <label>交易量: <input type="number" name="volume" required></label>
+  <label>日期: <input type="date" name="date" required></label>
+  <button type="submit">送出</button>
+</form>
+<p id="insertMsg"></p>
+
+<script>
+  let fullData = [];
+  let currentPage = 1;
+  const rowsPerPage = 20;
+
+  const extractYear = date => date.split('-')[0];
+  const extractMonth = date => date.split('-')[1];
+
+  async function loadGuavaData() {
+    const res = await fetch('/api/guava');
+    const raw = await res.json();
+    fullData = raw.map((row, i) => ({
+      id: i + 1,
+      date: row.c1,
+      avg_price: row.c2,
+      volume: row.c3
+    }));
+    renderYearOptions(fullData);
+    renderTable(fullData);
+    renderPagination(fullData);
+  }
+
+  function renderYearOptions(data) {
+    const yearSelect = document.getElementById('yearSelect');
+    yearSelect.innerHTML = '<option value="">-- 所有年份 --</option>';
+    const years = [...new Set(data.map(row => extractYear(row.date)))];
+    years.forEach(y => {
+      const option = document.createElement('option');
+      option.value = y;
+      option.textContent = y;
+      yearSelect.appendChild(option);
+    });
+  }
+
+  function renderMonthOptions(data, selectedYear) {
+    const monthSelect = document.getElementById('monthSelect');
+    monthSelect.innerHTML = '<option value="">-- 所有月份 --</option>';
+    const months = [...new Set(data
+            .filter(row => extractYear(row.date) === selectedYear)
+            .map(row => extractMonth(row.date)))];
+    months.forEach(m => {
+      const option = document.createElement('option');
+      option.value = m;
+      option.textContent = m;
+      monthSelect.appendChild(option);
+    });
+  }
+
+  function renderDateOptions(data, selectedYear, selectedMonth) {
+    const dateSelect = document.getElementById('dateSelect');
+    dateSelect.innerHTML = '<option value="">-- 所有日期 --</option>';
+    const dates = [...new Set(data
+            .filter(row => extractYear(row.date) === selectedYear && extractMonth(row.date) === selectedMonth)
+            .map(row => row.date))];
+    dates.forEach(d => {
+      const option = document.createElement('option');
+      option.value = d;
+      option.textContent = d;
+      dateSelect.appendChild(option);
+    });
+  }
+
+  function renderTable(data) {
+    const tbody = document.querySelector('#guavaTable tbody');
+    tbody.innerHTML = '';
+    const start = (currentPage - 1) * rowsPerPage;
+    const pageData = data.slice(start, start + rowsPerPage);
+    pageData.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+          <td>${row.id}</td>
+          <td>${row.avg_price}</td>
+          <td>${row.volume}</td>
+          <td>${row.date}</td>
+        `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderPagination(data) {
+    const totalPages = Math.ceil(data.length / rowsPerPage);
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '⬅ 上一頁';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => {
+      currentPage--;
+      renderTable(data);
+      renderPagination(data);
+    };
+    pagination.appendChild(prevBtn);
+
+    const pageInfo = document.createElement('span');
+    pageInfo.textContent = ` 第 ${currentPage} 頁 / 共 ${totalPages} 頁 `;
+    pagination.appendChild(pageInfo);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '下一頁 ➡';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => {
+      currentPage++;
+      renderTable(data);
+      renderPagination(data);
+    };
+    pagination.appendChild(nextBtn);
+  }
+
+  // 篩選邏輯
+  document.getElementById('yearSelect').addEventListener('change', () => {
+    const y = document.getElementById('yearSelect').value;
+    currentPage = 1;
+    if (!y) {
+      renderTable(fullData);
+      renderPagination(fullData);
+      document.getElementById('monthSelect').innerHTML = '<option value="">-- 所有月份 --</option>';
+      document.getElementById('dateSelect').innerHTML = '<option value="">-- 所有日期 --</option>';
+      return;
+    }
+    renderMonthOptions(fullData, y);
+    const filtered = fullData.filter(row => extractYear(row.date) === y);
+    renderTable(filtered);
+    renderPagination(filtered);
+  });
+
+  document.getElementById('monthSelect').addEventListener('change', () => {
+    const y = document.getElementById('yearSelect').value;
+    const m = document.getElementById('monthSelect').value;
+    currentPage = 1;
+    if (!y || !m) return;
+    renderDateOptions(fullData, y, m);
+    const filtered = fullData.filter(row => extractYear(row.date) === y && extractMonth(row.date) === m);
+    renderTable(filtered);
+    renderPagination(filtered);
+  });
+
+  document.getElementById('dateSelect').addEventListener('change', () => {
+    const d = document.getElementById('dateSelect').value;
+    currentPage = 1;
+    const filtered = d ? fullData.filter(row => row.date === d) : fullData;
+    renderTable(filtered);
+    renderPagination(filtered);
+  });
+
+  // 新增資料
+  document.getElementById('guavaForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    try {
+      const res = await fetch('/api/insert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const msg = await res.text();
+      document.getElementById('insertMsg').textContent = msg;
+      if (res.ok) {
+        form.reset();
+        loadGuavaData();
+      }
+    } catch (err) {
+      document.getElementById('insertMsg').textContent = '❌ 送出失敗';
+    }
+  });
+
+  loadGuavaData();
+</script>
+</body>
+</html>
