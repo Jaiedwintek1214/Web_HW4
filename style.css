@@ -1,0 +1,22 @@
+body {
+  font-family: sans-serif;
+  padding: 2rem;
+  background: #f9f9f9;
+}
+h1 {
+  color: #2c3e50;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 20px;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+}
+select, input, button {
+  margin: 5px;
+  padding: 6px;
+}
